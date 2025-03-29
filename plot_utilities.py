@@ -74,6 +74,7 @@ class PlotConfig:
             axes[key] = {"title": title, **self.plot_options["yaxis"]}
         return axes
 
+
 @dataclass
 class RegPlotConfig:
     plot_title: str = ""
@@ -171,7 +172,7 @@ class ScatterPlotConfig(PlotConfig):
                     "linewidth": 3,
                     "linecolor": 'black',
                     "mirror": True,
-                    "tickfont": {"size": 60, "family": "Latin Modern"}, # EC Font
+                    "tickfont": {"size": 60, "family": "Latin Modern"},  # EC Font
                     "ticks": "inside",
                     "tickwidth": 5,
                     "tickcolor": "black",
@@ -237,68 +238,7 @@ class ScatterPlotConfig(PlotConfig):
             axes[key] = {"title": title, **self.plot_options["yaxis"]}
         return axes
 
-
-@dataclass
-class KerrPlotConfig:
-    plot_title: str = "Kerr Effect Plot"
-    xaxis_title: str = r'$ \Huge{E^2 \text{ [kV/cm]}} \times 10^3$'  # Scaling factor to x-axis
-    yaxis_title: str = r'$ \Huge{\Delta n} \times 10^6$'  # Scaling factor to y-axis
-    font_family: str = 'Computer Modern'
-    font_size: int = 60
-    color_scale: list = field(default_factory=lambda: px.colors.qualitative.D3)
-    marker_size: int = 25
-    marker_symbol: str = 'square'
-    marker_border_width: int = 5
-    marker_border_color: str = 'black'
-    line_width: int = 5
-    line_color: str = field(default_factory=lambda: px.colors.qualitative.D3[1])
-    show_legend: bool = False
-    margin: dict = field(default_factory=lambda: dict(l=50, r=50, t=50, b=50))
-    width: int = 1500
-    height: int = 800
-
-    def get_layout(self):
-        """ Returns the layout for the Kerr plot """
-        return {
-                "plot_bgcolor": 'white',
-                "paper_bgcolor": 'white',
-                "font": {
-                        'family': self.font_family,
-                        'size': self.font_size,
-                        'color': 'black'
-                },
-                "xaxis": {
-                        'title': self.xaxis_title,
-                        'showline': True,
-                        'linewidth': 3,
-                        'linecolor': 'black',
-                        'mirror': True,
-                        'tickfont': {'size': self.font_size, 'family': self.font_family},
-                        "ticks": "inside",
-                        "tickwidth": 5,
-                        "tickcolor": "black",
-                        "ticklen": 10
-                },
-                "yaxis": {
-                        'title': self.yaxis_title,
-                        'showline': True,
-                        'linewidth': 3,
-                        'linecolor': 'black',
-                        'mirror': True,
-                        'tickfont': {'size': self.font_size, 'family': self.font_family, 'color': 'black'},
-                        "ticks": "inside",
-                        "tickwidth": 5,
-                        "tickcolor": "black",
-                        "ticklen": 10
-                },
-                "margin": self.margin,
-                "width": self.width,
-                "height": self.height,
-                "legend": None
-        }
-
-
-@dataclass
+@ dataclass
 class LogPlotConfig:
     plot_title: str = ""
     xaxis_title: str = ""
