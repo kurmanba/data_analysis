@@ -164,7 +164,7 @@ def process_directory_math(directory):
         cut = 18800
         data = read_oscilloscope_csv(file_path)
         time = data[:cut, 0]
-        ch1 = np.nan_to_num(data[:cut, 1])
+        ch1 = np.nan_to_num(data[:cut, 1])* config.setup.ch1_multiplier
         ch2 = data[:cut, 2] * config.setup.ch2_multiplier
 
         ch2 = sgf(ch2, 551, 1)
@@ -172,7 +172,7 @@ def process_directory_math(directory):
         # ch2[st:end] = modified_function(time[st:end]- time[st], ch2[st:end] )
         # ch2 = sgf(ch2, 1051, 2)
         ch2 -= np.min(ch2)
-        ch2 /= np.max(ch2)
+        # ch2 /= np.max(ch2)
 
         color = colors[idx]
         axes[0].plot(ch1, color=color)
@@ -225,11 +225,11 @@ if __name__ == '__main__':
     # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/60')
     # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/70')
 
-    # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00625_300')
-    # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00625_200')
+    process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00625_300')
+    process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00625_200')
     # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00625_150')
     # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00625_100')
-    #
+
     # process_directory_math("/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00078_300")
     # process_directory_math("/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00078_200")
     # process_directory_math("/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00078_150")
@@ -241,13 +241,13 @@ if __name__ == '__main__':
     # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/Experimtents/Damage_experiment/EG_00312_damage_concentration')
     # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/Experimtents/Damage_experiment/EG_00625_damage_concentration')
     #
-    process_directory_math("/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00156_300")
-    process_directory_math("/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00156_200")
-    process_directory_math("/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00156_150")
-    process_directory_math("/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00156_100")
-
-    # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/sd/examples/New Folder With Items')
-    process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00312_100')
-    process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00312_150')
-    process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00312_200')
-    process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00312_300')
+    # process_directory_math("/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00156_300")
+    # process_directory_math("/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00156_200")
+    # process_directory_math("/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00156_150")
+    # process_directory_math("/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00156_100")
+    #
+    # # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/sd/examples/New Folder With Items')
+    # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00312_100')
+    # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00312_150')
+    # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00312_200')
+    # process_directory_math('/Users/alisher/IdeaProjects/TEB_REMAKE/exp_pulses/00312_300')

@@ -8,15 +8,17 @@ import plotly.graph_objects as go
 import plotly.io as pio
 
 
+# Define the main Configuration class
 @dataclass
 class Configuration:
     kerr_plot_width: int = 1500
     kerr_plot_height: int = 800
     kerr_plot_margin: dict = field(default_factory=lambda: dict(l=50, r=50, t=50, b=50))
-    show_legend: bool = True
+    show_legend: bool = True  # Changed to True to show legend
 
-    xaxis_title: str = r'$ \Huge{E^2 \text{ [}V^2/cm^2\text{]} \times 10^{-3} } $'
-    yaxis_title: str = r'$ \Huge{\langle \Delta n_{\infty} \rangle \times 10^{6} } $'
+    # Axis configuration
+    xaxis_title: str = r'$ \Huge{E^2 \text{ [kV/cm]}} \times 10^3$'
+    yaxis_title: str = r'$ \Huge{\Delta n} \times 10^6$'
     plot_border_color: str = 'black'
     plot_border_width: int = 5
     tick_style: dict = field(default_factory=lambda: {
@@ -26,17 +28,20 @@ class Configuration:
             "length": 10
     })
 
+    # Font configuration
     font_family: str = 'Computer Modern'
     font_size: int = 60
     font_color: str = 'black'
 
+    # Marker/line styling
     color_scale: list = field(default_factory=lambda: px.colors.qualitative.D3)
-    marker_size: int = 15
+    marker_size: int = 30
     marker_symbol: str = 'circle'
-    marker_border_width: int = 2
+    marker_border_width: int = 5
     marker_border_color: str = 'black'
     line_width: int = 5
 
+    # Experiment related paths and configuration
     experiment_base_dirs: dict = field(default_factory=lambda: {
             'database': "/Users/alisher/IdeaProjects/TEB_REMAKE/databases",
             'figures': "/Users/alisher/IdeaProjects/TEB_REMAKE/figures"
@@ -67,7 +72,6 @@ class Configuration:
                 "xaxis": self._get_axis_config(self.xaxis_title),
                 "yaxis": self._get_axis_config(self.yaxis_title)
         }
-        base_layout["yaxis"].update({"range": [0, None]})
         return base_layout
 
     def _get_font_config(self):
@@ -96,6 +100,7 @@ class Configuration:
         }
 
 
+# Define helper functions for Kerr plot and experiment plotting
 def hex_to_rgba(hex_color, alpha=0.2):
     hex_color = hex_color.lstrip('#')
     r, g, b = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
@@ -115,9 +120,9 @@ def load_group_data(group):
     for filename in group:
         dataset = group[filename]
         if "e_square" in dataset:
-            e_squared.append(np.array(dataset["e_square"]))
+            e_squared.append(np.array(dataset["Rise_c1"]))
         if "dn_infinity" in dataset:
-            dn_infinity.append(np.array(dataset["dn_infinity"]))
+            dn_infinity.append(np.array(dataset["Rise_c2"]) )
 
     if not e_squared or not dn_infinity:
         return None, None
@@ -136,7 +141,7 @@ def plot_all_kerr_data(config: Configuration,
                        concentrations,
                        pulses):
     processed_hdf_path = Path(config.experiment_base_dirs['database']) / "processed_experiment_data.h5"
-    output_path = Path(config.experiment_base_dirs['figures']) / "kerr_all_pulses_with_ellipses.png"
+    output_path = Path(config.experiment_base_dirs['figures']) / "coefficients.png"
 
     color_scale = config.color_scale
     ellipse_colors = {conc: color_scale[i % len(color_scale)] for i, conc in enumerate(concentrations)}
@@ -162,41 +167,38 @@ def plot_all_kerr_data(config: Configuration,
 
     fig = go.Figure()
 
+    # Track which pulses we've already added to legend
     added_to_legend = {pulse: False for pulse in pulses}
 
     for conc in concentrations:
         for pulse, (e_sq, dn_inf) in data[conc].items():
             color = pulse_colors[pulse]
 
+            # Only show legend for the first occurrence of each pulse
             show_in_legend = not added_to_legend[pulse]
             added_to_legend[pulse] = True
-            e_sq_scaled, dn_inf_scaled = e_sq * 1e-3, dn_inf * 1e6
+
             fig.add_trace(go.Scatter(
-                    x=e_sq_scaled, y=dn_inf_scaled, mode='markers',
-                    marker=dict(size=config.marker_size, color=color, opacity=0.7,
-                                line=dict(width=config.marker_border_width, color=config.marker_border_color)),
+                    x=e_sq, y=dn_inf, mode='markers',
+                    marker=dict(size=10, color=color, opacity=0.7, line=dict(width=1, color='black')),
                     name=fr'$\Huge{pulse}\,[\mathrm{{ms}}]$',  # Only show pulse width in legend
                     legendgroup=pulse,  # Group by pulse width
                     showlegend=show_in_legend
             ))
 
-            slope, intercept = np.polyfit(e_sq, dn_inf, 1)
-            print(conc, pulse, slope, np.sqrt(intercept/slope))
-
-            x_fit = np.linspace(e_sq.min(), e_sq.max(), 100)
-            y_fit = slope * x_fit + intercept
-            x_fit_scaled, y_fit_scaled = x_fit * 1e-3, y_fit * 1e6
-            fig.add_trace(go.Scatter(
-                    x=x_fit_scaled, y=y_fit_scaled, mode='lines',
-                    line=dict(color=color, width=3, dash='dash'),
-                    showlegend=False,
-                    legendgroup=pulse
-            ))
+            # slope, intercept = np.polyfit(e_sq, dn_inf, 1)
+            # x_fit = np.linspace(e_sq.min(), e_sq.max(), 100)
+            # fig.add_trace(go.Scatter(
+            #         x=x_fit, y=slope * x_fit + intercept, mode='lines',
+            #         line=dict(color=color, width=3, dash='dash'),
+            #         showlegend=False,
+            #         legendgroup=pulse
+            # ))
 
     ellipse_params = {
-            '00156': {'a': 1.6, 'b': 200, 'angle': 90.8},
-            '00312': {'a': 1.8, 'b': 200, 'angle': 91.5},
-            '00625': {'a': 1.6, 'b': 200, 'angle': 92.1}
+            '00312': {'a': 0.16, 'b': 0.2, 'angle': 92.3},
+            '00156': {'a': 0.16, 'b': 0.2, 'angle': 91.2},
+            '00625': {'a': 0.16, 'b': 0.2, 'angle': 92.8}
     }
 
     for conc in concentrations:
@@ -205,10 +207,8 @@ def plot_all_kerr_data(config: Configuration,
 
         points = np.concatenate(ellipse_points[conc])
         center = np.mean(points, axis=0)
-        center_scaled = (center[0] / 1e3, center[1] * 1e6)
-
         params = ellipse_params.get(conc, {'a': 0.5, 'b': 0.25, 'angle': 0})
-        x, y = generate_ellipse(center_scaled, params['a'], params['b'], params['angle'])
+        x, y = generate_ellipse(center, params['a'], params['b'], params['angle'])
 
         fill_color = hex_to_rgba(ellipse_colors[conc], alpha=0.1)
         fig.add_trace(go.Scatter(
@@ -217,30 +217,33 @@ def plot_all_kerr_data(config: Configuration,
                 hoverinfo='skip',
                 showlegend=False
         ))
-
-    annotations = [
-            {"x": 500, "y": 10 , "text": r"$\Huge{0.0312\%}$", "showarrow": True, "ax": 0, "ay": 0},
-            {"x": 350, "y": 2.5 , "text": r"$\Huge{0.0156\%}$", "showarrow": True, "ax": 0, "ay": 0},
-            {"x": 100, "y": 10, "text": r"$\Huge{0.0625\%}$", "showarrow": True, "ax": 0, "ay": 0}
-    ]
-
-    for annotation in annotations:
-        fig.add_annotation(
-                x=annotation["x"],
-                y=annotation["y"],
-                text=annotation["text"],
-                showarrow=annotation["showarrow"],
-                arrowhead=4,
-                arrowsize=2,
-                ax=annotation["ax"],
-                ay=annotation["ay"],
-                font=dict(size=20, color='black'),
-                bgcolor="white",
-                borderpad=4
-        )
+    #
+    # annotations = [
+    #         {"x": 650, "y": 14, "text": r"$\Huge{0.0312\%}$", "showarrow": True, "ax": 0, "ay": 0},
+    #         {"x": 550, "y": 3, "text": r"$\Huge{0.0156\%}$", "showarrow": True, "ax": 0, "ay": 0},
+    #         {"x": 350, "y": 13, "text": r"$\Huge{0.0625\%}$", "showarrow": True, "ax": 0, "ay": 0}
+    # ]
+    #
+    # for annotation in annotations:
+    #     fig.add_annotation(
+    #             x=annotation["x"],
+    #             y=annotation["y"],
+    #             text=annotation["text"],
+    #             showarrow=annotation["showarrow"],
+    #             arrowhead=4,
+    #             arrowsize=2,
+    #             ax=annotation["ax"],
+    #             ay=annotation["ay"],
+    #             font=dict(size=20, color='black'),
+    #             bgcolor="white",
+    #             borderpad=4
+    #     )
 
     kerr_config = config.get_kerr_plot_layout()
+    kerr_config["xaxis"]["title"] = r"$\Huge{E^2 \,[kV^2/cm^2]}$"
+    kerr_config["yaxis"]["title"] = r"$\Huge{\langle \Delta n_{\infty} \rangle \times 10^{-6}}$"
     fig.update_layout(kerr_config)
+
     pio.write_image(fig, output_path, format='png', scale=3)
     print(f"✅ Plot saved to {output_path}")
 

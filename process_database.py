@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 from analizer import *
 from configuration import get_experiment_config
+from scipy.signal import savgol_filter as sgf
 
 if sys.platform == "darwin":
     mpl.use("macosx")
@@ -86,7 +87,9 @@ def interpret_dataset(data,
     d_fall, c1_fall, delay, b = find_consts_fall(s_fall, relaxation_time, config)
 
     s_rise_fit = double_rise(rise_time, d_rise, c1_rise, c2_rise, p)
+    s_rise_fit /= np.max(s_rise_fit)
     s_fall_fit = double_fall(relaxation_time, d_fall, c1_fall, delay, b, config)
+    s_fall_fit /= np.max(s_fall_fit)
 
     time_rise_std = np.arange(0, config.fit.standard_time, sample_rate)
     time_fall_std = np.arange(0, config.fit.standard_time, sample_rate)
@@ -105,31 +108,32 @@ def interpret_dataset(data,
     else:
         dn_fall_std[: len(dn_fall_std)] = dn_fall[: len(dn_fall_std)]
 
-    reg_times, reg_values = regularization(time_fall_std, dn_fall_std, config)
-    aspect_ratio = conver_p(1 / (6 * d_fall), config)
-    dn_infinity = np.mean(dn_rise[:-20])
-    e_square = np.mean(field[end - 200:end])
+    reg_times, reg_values = regularization(time_fall_std, sgf(dn_fall_std,201,1), config)
 
-    keys = ["Rise", "Rise_scaled", "s_rise_fit", "Rise_time",
-            "Fall", "Fall_scaled", "s_fall_fit", "Fall_time",
+    aspect_ratio = conver_p(1 / (6 * d_fall), config)
+    dn_infinity = np.mean(dn_rise[:-1000])
+    e_square = np.mean(field[end - 1000:end])**2
+
+    keys = ["Rise", "Rise_scaled", "s_rise_fit", "Rise_time", 'Rise_time_std',
+            "Fall", "Fall_scaled", "s_fall_fit", "Fall_time", 'Fall_time_std',
             "Rise_c1", "Rise_c2", "Rise_D", "Fall_c1", "Fall_D",
             'Sample_rate',
-            'dn',
+            'dn', 'time',
             'e_square', 'dn_infinity',
             'aspect_ratio',
             'reg_times', 'reg_values']
 
-    results = [dn_rise_std, get_scale(dn_rise_std), s_rise_fit, time_rise_std,
-               dn_fall_std, get_scale(dn_fall_std), s_fall_fit, time_fall_std,
+    # intensity[end + 100:] = sgf(intensity[end + 100:], window_length=551, polyorder=1)
+    results = [dn_rise, get_scale(dn_rise_std), s_rise_fit, rise_time, time_rise_std,
+               dn_fall, get_scale(dn_fall_std), s_fall_fit, relaxation_time, time_fall_std,
                c1_rise, c2_rise, d_rise, c1_fall, d_fall,
                sample_rate,
-               bg_sub(intensity, config),
+               bg_sub(intensity, config), time,
                e_square, dn_infinity,
                aspect_ratio,
                reg_times, reg_values]
 
     return dict(zip(keys, results))
-
 
 
 def process_database(pulse_selection=None,
@@ -143,7 +147,7 @@ def process_database(pulse_selection=None,
     processed_hdf_filename = os.path.join(config.base_dirs.database, "processed_experiment_data.h5")
 
     pulse_selection = ['100', '150', '200', '300']
-    conc_selection = ["00156","00312","00625"]
+    conc_selection = ["00156", "00312", "00625"]
 
     group_paths = generate_group_paths(config, pulse_selection, conc_selection)
     existing_groups = get_existing_groups(raw_hdf_filename, group_paths)
@@ -160,6 +164,12 @@ def process_database(pulse_selection=None,
             processed_group = processed_hdf.create_group(group)
 
             for dataset in raw_hdf[group]:
+
+                st, end, _, _, accept = (lambda b: (b.st, b.end, b.tr1, b.tr2, b.accept))(
+                        config.directories.boundaries.get(f'{group}/{dataset}', None))
+                if accept == 0:
+                    continue
+
                 results = interpret_dataset(np.array(raw_hdf[group][dataset][:]), config, group, dataset)
 
                 dataset_group = processed_group.create_group(dataset)

@@ -1,11 +1,17 @@
+import sys
 from dataclasses import dataclass, field
-from pathlib import Path
 
 import h5py
+import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+from pylab import mpl
+# from tabulate import tabulate
 import plotly.io as pio
+
+if sys.platform == "darwin":
+    mpl.use("macosx")
 
 
 @dataclass
@@ -16,7 +22,7 @@ class Configuration:
     show_legend: bool = True
 
     xaxis_title: str = r'$ \Huge{E^2 \text{ [}V^2/cm^2\text{]} \times 10^{-3} } $'
-    yaxis_title: str = r'$ \Huge{\langle \Delta n_{\infty} \rangle \times 10^{6} } $'
+    yaxis_title: str = r'$ \Huge{D_r \, [\mathrm{rad}^2/\mathrm{s}]} $'
     plot_border_color: str = 'black'
     plot_border_width: int = 5
     tick_style: dict = field(default_factory=lambda: {
@@ -102,48 +108,69 @@ def hex_to_rgba(hex_color, alpha=0.2):
     return f"rgba({r}, {g}, {b}, {alpha})"
 
 
-def generate_ellipse(center, a, b, angle_deg, num_points=100):
-    t = np.linspace(0, 2 * np.pi, num_points)
-    angle = np.deg2rad(angle_deg)
-    x = center[0] + a * np.cos(t) * np.cos(angle) - b * np.sin(t) * np.sin(angle)
-    y = center[1] + a * np.cos(t) * np.sin(angle) + b * np.sin(t) * np.cos(angle)
-    return x, y
-
-
 def load_group_data(group):
     e_squared, dn_infinity = [], []
+    rise_c1, rise_c2, rise_d, fall_c1, fall_d = [], [], [], [], []
+
     for filename in group:
         dataset = group[filename]
         if "e_square" in dataset:
             e_squared.append(np.array(dataset["e_square"]))
         if "dn_infinity" in dataset:
             dn_infinity.append(np.array(dataset["dn_infinity"]))
+        if "Rise_c1" in dataset:
+            rise_c1.append(np.array(dataset["Rise_c1"]))
+        if "Rise_c2" in dataset:
+            rise_c2.append(np.array(dataset["Rise_c2"]))
+        if "Rise_D" in dataset:
+            rise_d.append(np.array(dataset["Rise_D"]))
+        if "Fall_c1" in dataset:
+            fall_c1.append(np.array(dataset["Fall_c1"]))
+        if "Fall_D" in dataset:
+            fall_d.append(np.array(dataset["Fall_D"]))
 
     if not e_squared or not dn_infinity:
-        return None, None
+        return None, None, None, None, None, None, None, None, None
 
     e_squared = np.array(e_squared).flatten()
     dn_infinity = np.array(dn_infinity).flatten()
+    rise_c1 = np.array(rise_c1).flatten()
+    rise_c2 = np.array(rise_c2).flatten()
+    rise_d = np.array(rise_d).flatten()
+    fall_c1 = np.array(fall_c1).flatten()
+    fall_d = np.array(fall_d).flatten()
 
     if e_squared.size == 0 or dn_infinity.size == 0:
-        return None, None
+        return None, None, None, None, None, None, None, None, None
 
     sort_idx = np.argsort(e_squared)
-    return e_squared[sort_idx], dn_infinity[sort_idx]
+    return (e_squared[sort_idx], dn_infinity[sort_idx], rise_c1[sort_idx],
+            rise_c2[sort_idx], rise_d[sort_idx], fall_c1[sort_idx], fall_d[sort_idx])
 
 
-def plot_all_kerr_data(config: Configuration,
-                       concentrations,
-                       pulses):
-    processed_hdf_path = Path(config.experiment_base_dirs['database']) / "processed_experiment_data.h5"
-    output_path = Path(config.experiment_base_dirs['figures']) / "kerr_all_pulses_with_ellipses.png"
+def plot_all_kerr_data(concentrations, pulses):
+    config = Configuration()
+    processed_hdf_path = '/Users/alisher/IdeaProjects/TEB_REMAKE/databases/processed_experiment_data.h5'
+    output_path ='/Users/alisher/IdeaProjects/TEB_REMAKE/figures/Rise.png'
 
     color_scale = config.color_scale
     ellipse_colors = {conc: color_scale[i % len(color_scale)] for i, conc in enumerate(concentrations)}
     pulse_colors = {pulse: color_scale[i % len(color_scale)] for i, pulse in enumerate(pulses)}
+    concentration_values = {'00156': 0.0156, '00312': 0.0312, '00625': 0.0625}
+
+    min_size, max_size = 5, 15
+    marker_sizes = {
+            conc: min_size + (max_size - min_size) * (value - min(concentration_values.values())) /
+                  (max(concentration_values.values()) - min(concentration_values.values()))
+            for conc, value in concentration_values.items()
+    }
+    marker_border = {
+            '00156': 1,
+            '00312': 1,
+            '00625': 5
+    }
 
     data = {conc: {} for conc in concentrations}
-    ellipse_points = {conc: [] for conc in concentrations}
 
     with h5py.File(processed_hdf_path, 'r') as hdf_file:
         for conc in concentrations:
@@ -153,101 +180,47 @@ def plot_all_kerr_data(config: Configuration,
                     print(f"❌ {group_path} not found")
                     continue
 
-                e_sq, dn_inf = load_group_data(hdf_file[group_path])
-                if e_sq is None or dn_inf is None:
-                    continue
-
-                data[conc][pulse] = (e_sq, dn_inf)
-                ellipse_points[conc].append(np.column_stack((e_sq, dn_inf)))
-
-    fig = go.Figure()
+                e_sq, dn_inf, rise_c1, rise_c2, rise_d, fall_c1, fall_d = load_group_data(hdf_file[group_path])
+                data[conc][pulse] = (e_sq, dn_inf, rise_c1, rise_c2, rise_d, fall_c1, fall_d)
 
     added_to_legend = {pulse: False for pulse in pulses}
-
+    table_data = []
+    fig = go.Figure()
+    print(concentrations)
     for conc in concentrations:
-        for pulse, (e_sq, dn_inf) in data[conc].items():
-            color = pulse_colors[pulse]
 
+        plt.figure(figsize=(8, 6))
+        for pulse, (e_sq, dn_inf, rise_c1, rise_c2, rise_d, fall_c1, fall_d) in data[conc].items():
+            color = pulse_colors[pulse]
             show_in_legend = not added_to_legend[pulse]
             added_to_legend[pulse] = True
+
             e_sq_scaled, dn_inf_scaled = e_sq * 1e-3, dn_inf * 1e6
+            table_data.append([conc, pulse, rise_c1[0], rise_c2[0], rise_d[0], fall_c1[0], fall_d[0]])
+
             fig.add_trace(go.Scatter(
-                    x=e_sq_scaled, y=dn_inf_scaled, mode='markers',
+                    x=np.sqrt(e_sq), y=rise_d*1e3, mode='markers',
                     marker=dict(size=config.marker_size, color=color, opacity=0.7,
-                                line=dict(width=config.marker_border_width, color=config.marker_border_color)),
+                                line=dict(width=marker_border[conc], color=config.marker_border_color)),
                     name=fr'$\Huge{pulse}\,[\mathrm{{ms}}]$',  # Only show pulse width in legend
                     legendgroup=pulse,  # Group by pulse width
                     showlegend=show_in_legend
             ))
 
-            slope, intercept = np.polyfit(e_sq, dn_inf, 1)
-            print(conc, pulse, slope, np.sqrt(intercept/slope))
-
-            x_fit = np.linspace(e_sq.min(), e_sq.max(), 100)
-            y_fit = slope * x_fit + intercept
-            x_fit_scaled, y_fit_scaled = x_fit * 1e-3, y_fit * 1e6
-            fig.add_trace(go.Scatter(
-                    x=x_fit_scaled, y=y_fit_scaled, mode='lines',
-                    line=dict(color=color, width=3, dash='dash'),
-                    showlegend=False,
-                    legendgroup=pulse
-            ))
-
-    ellipse_params = {
-            '00156': {'a': 1.6, 'b': 200, 'angle': 90.8},
-            '00312': {'a': 1.8, 'b': 200, 'angle': 91.5},
-            '00625': {'a': 1.6, 'b': 200, 'angle': 92.1}
-    }
-
-    for conc in concentrations:
-        if not ellipse_points[conc]:
-            continue
-
-        points = np.concatenate(ellipse_points[conc])
-        center = np.mean(points, axis=0)
-        center_scaled = (center[0] / 1e3, center[1] * 1e6)
-
-        params = ellipse_params.get(conc, {'a': 0.5, 'b': 0.25, 'angle': 0})
-        x, y = generate_ellipse(center_scaled, params['a'], params['b'], params['angle'])
-
-        fill_color = hex_to_rgba(ellipse_colors[conc], alpha=0.1)
-        fig.add_trace(go.Scatter(
-                x=x, y=y, fill='toself', fillcolor=fill_color,
-                line=dict(color=ellipse_colors[conc], width=0.5),
-                hoverinfo='skip',
-                showlegend=False
-        ))
-
-    annotations = [
-            {"x": 500, "y": 10 , "text": r"$\Huge{0.0312\%}$", "showarrow": True, "ax": 0, "ay": 0},
-            {"x": 350, "y": 2.5 , "text": r"$\Huge{0.0156\%}$", "showarrow": True, "ax": 0, "ay": 0},
-            {"x": 100, "y": 10, "text": r"$\Huge{0.0625\%}$", "showarrow": True, "ax": 0, "ay": 0}
-    ]
-
-    for annotation in annotations:
-        fig.add_annotation(
-                x=annotation["x"],
-                y=annotation["y"],
-                text=annotation["text"],
-                showarrow=annotation["showarrow"],
-                arrowhead=4,
-                arrowsize=2,
-                ax=annotation["ax"],
-                ay=annotation["ay"],
-                font=dict(size=20, color='black'),
-                bgcolor="white",
-                borderpad=4
-        )
+            # plt.scatter(np.sqrt(e_sq), fall_d, label=f"{conc}-{pulse}" if show_in_legend else "", alpha=0.7)
+            # plt.scatter(np.sqrt(e_sq), rise_d, label=f"{conc}-{pulse}" if show_in_legend else "", alpha=0.7)
 
     kerr_config = config.get_kerr_plot_layout()
     fig.update_layout(kerr_config)
     pio.write_image(fig, output_path, format='png', scale=3)
     print(f"✅ Plot saved to {output_path}")
 
+    headers = ["Concentration", "Pulse", "Rise_c1", "Rise_c2", "Rise_D", "Fall_c1", "Fall_D"]
+    print(table_data)
+    # print(tabulate(table_data, headers=headers, tablefmt="grid"))
 
-# Usage
+
 if __name__ == "__main__":
-    config = Configuration()
     concentrations = ['00312', '00156', '00625']
     pulse_widths = ['100', '150', '200', '300']
-    plot_all_kerr_data(config, concentrations, pulse_widths)
+    plot_all_kerr_data(concentrations, pulse_widths)

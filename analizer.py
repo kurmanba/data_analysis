@@ -181,9 +181,9 @@ def package(data) -> dict:
 
 
 def steady_state_index(dn_rise,
-                            threshold_factor=0.01,
-                            window_size=10,
-                            percentage=0.95):
+                       threshold_factor=0.01,
+                       window_size=10,
+                       percentage=0.95):
     """
     Determines the steady-state index in the rise of the pulse response.
     """
@@ -212,6 +212,35 @@ def steady_state_index(dn_rise,
         return steady_indices[0]
 
     return len(dn_rise) - 1
+
+
+def compute_induced_dipole(a, r_e, config):
+    """
+    Computes the induced dipole moment γ for a spheroidal particle given the
+    aspect ratio r_e = c / a.
+    """
+
+    eps_host, eps_par, eps_perp = config.material.eps_host, config.material.eps_par, config.material.eps_perp
+    c = r_e * a
+
+    if np.isclose(r_e, 1.0):
+        f_re = 2 / 3
+    elif r_e > 1:
+        f_re = (r_e ** 2 / (r_e ** 2 - 1)) - (r_e * np.arccosh(r_e)) / ((r_e ** 2 - 1) ** 1.5)
+    else:
+        f_re = (r_e * np.arccos(r_e)) / ((1 - r_e ** 2) ** 1.5) - (r_e ** 2) / (1 - r_e ** 2)
+
+    alpha_par = 2 / (a ** 3 * r_e) * (1 - f_re)  # associated with eps_par
+    alpha_perp = f_re / (a ** 3 * r_e)  # associated with eps_perp
+
+    volume_factor = (a ** 2 * c) / 2
+
+    n_par = alpha_par * volume_factor
+    n_perp = alpha_perp * volume_factor
+
+    gamma = (eps_par - eps_perp) - eps_host * ((eps_par / eps_host - 1) ** 2 * n_par
+                                               - (eps_perp / eps_host - 1) ** 2 * n_perp)
+    return gamma, n_par, n_perp
 
 
 if __name__ == "__main__":
